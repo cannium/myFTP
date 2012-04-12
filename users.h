@@ -43,11 +43,11 @@ struct userlist
 
 typedef struct userlist userList;
 
-userList connectedUser = {NULL, NULL};
-userList unconnectedUser = {NULL, NULL};
-
 user* addNewUser(userList* list);
 void moveUser(userList* from, userList* to, user* theUser);
 user* findUserByName(const char* name, userList* list);
+user* findUserByFileDescriptor(int fileDescriptor, userList* list);
+
+void printUserList(userList* list);
 
 #endif

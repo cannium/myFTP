@@ -5,22 +5,23 @@
 #include <sys/select.h>
 #include <arpa/inet.h>
 
+#include "global.h"
 #include "users.h"
 #include "command.h"
 
 #define LISTEN_PORT		21
 #define LISTEN_QUEUE	128
 
-#define BUFFER_SIZE		1024
-
-// FIXME fix users
-// TODO  add login procedure
+#define FD_SET_SIZE		32
 
 int listenSocketFileDescriptor;
 int maxFileDescriptor;
+fd_set readSet;
 struct sockaddr_in serverAddress, clientAddress;
-extern user* connectedUser;
 char buffer[BUFFER_SIZE];
+
+extern userList connectedUser;
+extern userList unconnectedUser;
 
 void initialize();
 void startServer();
@@ -38,8 +39,48 @@ void initialize()
 {
 	/* TODO:
 	   setup SIGINT handler;
-	   open configuration file;
 	*/
+	FILE* configurationFile;
+	configurationFile = fopen("ftp.conf", "r");
+	if(!configurationFile)
+	{
+		fprintf(stderr, "error open configuration file\n");
+		exit(-1);
+	}
+
+	while( !feof(configurationFile))
+	{
+		if( fgets(buffer, BUFFER_SIZE, configurationFile) == NULL)
+			continue;
+
+		if(buffer[0] == '#' || buffer[0] == '\n')
+			continue;
+
+		user* newUser = addNewUser(&unconnectedUser);
+		if(!newUser)
+		{
+			fprintf(stderr, "error adding new user\n");
+			exit(-1);
+		}
+
+		char upload[4], download[4], speedLimit[32]; 		
+		sscanf(buffer, "%63s %63s %1023s %s %s %s", newUser -> username,
+				newUser -> password, newUser -> homeDirectory, upload, download,
+				speedLimit);
+		if(upload[0] == 'Y')
+			newUser -> upload = ENABLE;
+		else
+			newUser -> upload = DISABLE;
+
+		if(download[0] == 'Y')
+			newUser -> download = ENABLE;
+		else
+			newUser -> download = DISABLE;
+
+		newUser -> speedLimit = atoi(speedLimit);
+	}
+	if(DEBUG)
+		printUserList(&unconnectedUser);
 
 	memset(&serverAddress, 0, sizeof(serverAddress));
 	serverAddress.sin_family = AF_INET;
@@ -71,14 +112,26 @@ void startServer()
 
 }
 
+void removeSocket(int fileDescriptor)
+{
+	close(fileDescriptor);
+	FD_CLR(fileDescriptor, &readSet);
+
+	if(fileDescriptor == maxFileDescriptor)
+		maxFileDescriptor--;
+}
+
 void mainLoop()
 {
-	fd_set readSet,tempSet;
+	fd_set tempSet;
+	int i;
+	ssize_t n;
 	
 	maxFileDescriptor = listenSocketFileDescriptor;
 	FD_ZERO(&readSet);
 	FD_SET(listenSocketFileDescriptor, &readSet);
 
+	int unknownUserFileDescriptor[FD_SET_SIZE] = {0};
 	while(1)
 	{
 		tempSet = readSet;
@@ -103,12 +156,19 @@ void mainLoop()
 				exit(-1);
 			}
 
+			reply(connectingFileDescriptor, SERVICE_READY, "welcome!");
+
+			for(i = 0; i < FD_SET_SIZE; i++)
+			{
+				if(unknownUserFileDescriptor[i] == 0)
+					break;
+			}
+			unknownUserFileDescriptor[i] = connectingFileDescriptor;
+
 			FD_SET(connectingFileDescriptor, &readSet);
 
 			if(connectingFileDescriptor > maxFileDescriptor)
 				maxFileDescriptor = connectingFileDescriptor;
-
-			addNewUser(connectingFileDescriptor);
 
 			readyNumber--;
 			if(readyNumber <= 0)
@@ -116,29 +176,81 @@ void mainLoop()
 		}
 
 		user* current;
-		for(current = connectedUser; current != NULL; current = current -> next)
+		for(current = connectedUser.first; current; 
+							current = current -> next)
 		{
 			int fd = current -> socketFileDescriptor;
 			if( FD_ISSET(fd, &tempSet))
 			{
-				ssize_t n;
 				n = read(fd, buffer, BUFFER_SIZE);
 				if(n == 0)
 				{
-					close(fd);
-					removeUser(fd);
-					FD_CLR(fd, &readSet);
-
-					if(fd == maxFileDescriptor)
-						maxFileDescriptor--;
+					moveUser(&connectedUser, &unconnectedUser, current);
+					removeSocket(fd);					
 				}
 				else
-					handleCommand(buffer, n);
+				{
+					buffer[n] = '\0';
+					handleCommand(current, buffer, n);
+				}
 
 				readyNumber--;
 				if(readyNumber <= 0)
 					break;
 			}
 		}
+
+				
+		for(i = 0; i < FD_SET_SIZE; i++)
+		{
+			int fd = unknownUserFileDescriptor[i];
+			if(!fd)
+				continue;
+			if( !FD_ISSET(fd, &tempSet))
+				continue;
+			
+			n = read(fd, buffer, BUFFER_SIZE);
+			if(n == 0)
+			{
+				unknownUserFileDescriptor[i] = 0;
+				removeSocket(fd);				
+			}
+			else
+			{
+				int len = getRequestCodeLen(buffer, n);
+				char temp[BUFFER_SIZE];
+				strncpy(temp, buffer, len);
+				temp[len] = '\0';
+				if( strcmp(temp, "USER") == 0)
+				{
+					reply(fd, NEED_PASSWORD, "specify your password");
+					char name[NAME_LENGTH];
+					sscanf(buffer + len, "%63s", name);
+					user* connecting = findUserByName(name, &unconnectedUser);
+					if(connecting)
+					{
+						moveUser(&unconnectedUser, &connectedUser, connecting);
+						connecting -> socketFileDescriptor = fd;
+					}
+				}
+				else
+					removeSocket(fd);
+
+				unknownUserFileDescriptor[i] = 0;				
+			}
+							
+			readyNumber--;
+			if(readyNumber <= 0)
+				break;
+		}
+
+		if(DEBUG)
+		{
+			printf("unconnectedUser:\n");
+			printUserList(&unconnectedUser);
+			printf("connectedUser:\n");
+			printUserList(&connectedUser);
+		}
+
 	}
 }

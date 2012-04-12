@@ -4,6 +4,8 @@
 
 #include "users.h"
 
+userList connectedUser = {NULL, NULL};
+userList unconnectedUser = {NULL, NULL};
 
 static void removeFrom(userList* list, user* theUser);
 static void addTo(userList* list, user* theUser);
@@ -84,4 +86,25 @@ user* findUserByName(const char* name, userList* list)
 			return current;
 	}
 	return NULL;
+}
+
+user* findUserByFileDescriptor(int fileDescriptor, userList* list)
+{
+	user* current;
+	for(current = list -> first; current; current = current -> next)
+	{
+		if( fileDescriptor == current -> socketFileDescriptor)
+			return current;
+	}
+	return NULL;
+}
+
+void printUserList(userList* list)
+{
+	user* current;
+	for(current = list -> first; current; current = current -> next)
+	{
+		printf("%s:%s@%s\n", current -> username, current -> password,
+							current -> homeDirectory);
+	}
 }
