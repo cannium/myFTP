@@ -4,5 +4,6 @@
 #define DEBUG			1
 
 #define BUFFER_SIZE		1024
+#define REQUEST_BUFF	8
 
 #endif

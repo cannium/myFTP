@@ -8,6 +8,7 @@
 #define SERVIVE_CLOSE	221
 #define LOGIN_SUCCESS	230
 #define NEED_PASSWORD	331
+#define NOT_IMPLEMENT	502
 #define LOGIN_FAILED	530
 
 void handleCommand(user* currentUser, const char* buffer, ssize_t size);

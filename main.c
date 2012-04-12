@@ -218,7 +218,7 @@ void mainLoop()
 			else
 			{
 				int len = getRequestCodeLen(buffer, n);
-				char temp[BUFFER_SIZE];
+				char temp[REQUEST_BUFF];
 				strncpy(temp, buffer, len);
 				temp[len] = '\0';
 				if( strcmp(temp, "USER") == 0)
@@ -231,12 +231,11 @@ void mainLoop()
 					{
 						moveUser(&unconnectedUser, &connectedUser, connecting);
 						connecting -> socketFileDescriptor = fd;
+						unknownUserFileDescriptor[i] = 0;				
 					}
 				}
 				else
 					removeSocket(fd);
-
-				unknownUserFileDescriptor[i] = 0;				
 			}
 							
 			readyNumber--;
@@ -250,6 +249,7 @@ void mainLoop()
 			printUserList(&unconnectedUser);
 			printf("connectedUser:\n");
 			printUserList(&connectedUser);
+			printf("\n");
 		}
 
 	}
