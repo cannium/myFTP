@@ -38,7 +38,7 @@ int main(int argc, char* argv[])
 void initialize()
 {
 	/* TODO:
-	   setup SIGINT handler;
+	   setup SIGINT SIGCHLD handler;
 	*/
 	FILE* configurationFile;
 	configurationFile = fopen("ftp.conf", "r");
@@ -81,15 +81,15 @@ void initialize()
 	}
 	if(DEBUG)
 		printUserList(&unconnectedUser);
-
-	memset(&serverAddress, 0, sizeof(serverAddress));
-	serverAddress.sin_family = AF_INET;
-	serverAddress.sin_addr.s_addr = htonl(INADDR_ANY);
-	serverAddress.sin_port = htons(LISTEN_PORT);
 }
 
 void startServer()
 {
+	memset(&serverAddress, 0, sizeof(serverAddress));
+	serverAddress.sin_family = AF_INET;
+	serverAddress.sin_addr.s_addr = htonl(INADDR_ANY);
+	serverAddress.sin_port = htons(LISTEN_PORT);
+
 	listenSocketFileDescriptor = socket(AF_INET, SOCK_STREAM, 0);
 	if(listenSocketFileDescriptor < 0)
 	{
@@ -217,15 +217,11 @@ void mainLoop()
 			}
 			else
 			{
-				int len = getRequestCodeLen(buffer, n);
-				char temp[REQUEST_BUFF];
-				strncpy(temp, buffer, len);
-				temp[len] = '\0';
+				char temp[REQUEST_BUFF], name[NAME_LENGTH];
+				sscanf(buffer, "%4s %63s", temp, name);
 				if( strcmp(temp, "USER") == 0)
 				{
 					reply(fd, NEED_PASSWORD, "specify your password");
-					char name[NAME_LENGTH];
-					sscanf(buffer + len, "%63s", name);
 					user* connecting = findUserByName(name, &unconnectedUser);
 					if(connecting)
 					{

@@ -20,9 +20,7 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 		return;
 
 	char request[REQUEST_BUFF], parameter[BUFFER_SIZE];
-	int len = getRequestCodeLen(buffer, size);
-	strncpy(request, buffer, len);
-	sscanf(buffer + len, "%1023s", parameter);
+	sscanf(buffer, "%4s %1023s", request, parameter);
 
 	if( strcmp(request, "PASS") == 0)		// password
 	{
@@ -84,15 +82,3 @@ void reply(int socketFileDescriptor, int replyCode, const char* message)
 	write(socketFileDescriptor, buffer, strlen(buffer));
 }
 
-int getRequestCodeLen(const char* request, int total)
-{
-	int len;
-	for(len = 0; len < total; len++)
-	{
-		if(request[len] == ' ')
-		{
-			return len;
-		}
-	}
-	return total;
-}

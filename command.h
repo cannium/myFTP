@@ -13,6 +13,5 @@
 
 void handleCommand(user* currentUser, const char* buffer, ssize_t size);
 void reply(int socketFileDescriptor, int replyCode, const char* message);
-int getRequestCodeLen(const char* request, int total);
 
 #endif
