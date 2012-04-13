@@ -18,17 +18,20 @@ struct userInformation
 	char password[NAME_LENGTH];
 	char homeDirectory[PATH_LENGTH];// full path of user's home directory
 	char currentPath[PATH_LENGTH];	// full path of current working directory
-	int upload;						// ENABLE or DISABLE 
-	int download;					// ENABLE or DISABLE
-	int socketFileDescriptor;		// of user's control connection
+	int writeAccess;				// ENABLE or DISABLE 
+	int readAccess;					// ENABLE or DISABLE
+	int controlSocket;				// control connection file descriptor
+	int	dataSocket;					// data-transfer connection file descriptor,
+									// used in passive mode
+	int dataPortNumber;				// port number for data transmission,
+									// used in active mode	
 	int ftpMode;					// ACTIVE_MODE or PASSIVE_MODE
-	int dataPortNumber;				// port number for data transmission
 	time_t loginTime;				// when the user logged in
 	long long dataTransferred;		// total bytes of data transferred
 	int speedLimit;					// the speed limit of uploading and 
 									// downloading, in kB/s. 0 if no limit
 	
-	// stored in a linked list, so:
+	// stored as linked list, so:
 	struct userInformation* previous;
 	struct userInformation* next;
 };

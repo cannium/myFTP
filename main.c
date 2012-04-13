@@ -63,16 +63,16 @@ void initialize()
 			exit(-1);
 		}
 
-		char upload[4], download[4], speedLimit[32]; 		
+		char writeAccess[4], readAccess[4], speedLimit[32]; 		
 		sscanf(buffer, "%63s %63s %1023s %s %s %s", newUser -> username,
-				newUser -> password, newUser -> homeDirectory, upload, download,
-				speedLimit);
-		if(upload[0] == 'Y')
+				newUser -> password, newUser -> homeDirectory, writeAccess,
+			   	readAccess, speedLimit);
+		if(writeAccess[0] == 'Y')
 			newUser -> upload = ENABLE;
 		else
 			newUser -> upload = DISABLE;
 
-		if(download[0] == 'Y')
+		if(readAccess[0] == 'Y')
 			newUser -> download = ENABLE;
 		else
 			newUser -> download = DISABLE;
@@ -179,13 +179,17 @@ void mainLoop()
 		for(current = connectedUser.first; current; 
 							current = current -> next)
 		{
-			int fd = current -> socketFileDescriptor;
+			int fd = current -> controlSocket;
+			if(fd == 0)
+				continue;
+
 			if( FD_ISSET(fd, &tempSet))
 			{
 				n = read(fd, buffer, BUFFER_SIZE);
 				if(n == 0)
 				{
 					moveUser(&connectedUser, &unconnectedUser, current);
+					current -> controlSocket = 0;
 					removeSocket(fd);					
 				}
 				else
@@ -226,7 +230,7 @@ void mainLoop()
 					if(connecting)
 					{
 						moveUser(&unconnectedUser, &connectedUser, connecting);
-						connecting -> socketFileDescriptor = fd;
+						connecting -> controlSocket = fd;
 						unknownUserFileDescriptor[i] = 0;				
 					}
 				}

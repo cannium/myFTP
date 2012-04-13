@@ -68,7 +68,7 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 	}
 	else
 	{
-		reply(currentUser -> socketFileDescriptor, NOT_IMPLEMENT, \
+		reply(currentUser -> controlSocket, NOT_IMPLEMENT, \
 				"command not implemented");
 	}
 
