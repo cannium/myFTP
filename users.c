@@ -88,12 +88,12 @@ user* findUserByName(const char* name, userList* list)
 	return NULL;
 }
 
-user* findUserByFileDescriptor(int fileDescriptor, userList* list)
+user* findUserByControlSocketFileDescriptor(int fileDescriptor, userList* list)
 {
 	user* current;
 	for(current = list -> first; current; current = current -> next)
 	{
-		if( fileDescriptor == current -> socketFileDescriptor)
+		if( fileDescriptor == current -> controlSocket)
 			return current;
 	}
 	return NULL;

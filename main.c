@@ -9,14 +9,11 @@
 #include "users.h"
 #include "command.h"
 
-#define LISTEN_PORT		21
-#define LISTEN_QUEUE	128
-
 #define FD_SET_SIZE		32
 
 int listenSocketFileDescriptor;
-int maxFileDescriptor;
-fd_set readSet;
+extern int maxFileDescriptor;
+extern fd_set readSet;
 struct sockaddr_in serverAddress, clientAddress;
 char buffer[BUFFER_SIZE];
 
@@ -24,14 +21,13 @@ extern userList connectedUser;
 extern userList unconnectedUser;
 
 void initialize();
-void startServer();
 void mainLoop();
 
 
 int main(int argc, char* argv[])
 {
 	initialize();
-	startServer();
+	listenSocketFileDescriptor = startServer(&serverAddress);
 	mainLoop();
 }
 
@@ -68,57 +64,25 @@ void initialize()
 				newUser -> password, newUser -> homeDirectory, writeAccess,
 			   	readAccess, speedLimit);
 		if(writeAccess[0] == 'Y')
-			newUser -> upload = ENABLE;
+			newUser -> writeAccess = ENABLE;
 		else
-			newUser -> upload = DISABLE;
+			newUser -> writeAccess = DISABLE;
 
 		if(readAccess[0] == 'Y')
-			newUser -> download = ENABLE;
+			newUser -> readAccess = ENABLE;
 		else
-			newUser -> download = DISABLE;
+			newUser -> readAccess = DISABLE;
 
 		newUser -> speedLimit = atoi(speedLimit);
 	}
 	if(DEBUG)
 		printUserList(&unconnectedUser);
-}
 
-void startServer()
-{
 	memset(&serverAddress, 0, sizeof(serverAddress));
 	serverAddress.sin_family = AF_INET;
 	serverAddress.sin_addr.s_addr = htonl(INADDR_ANY);
 	serverAddress.sin_port = htons(LISTEN_PORT);
 
-	listenSocketFileDescriptor = socket(AF_INET, SOCK_STREAM, 0);
-	if(listenSocketFileDescriptor < 0)
-	{
-		fprintf(stderr, "error creating socket\n");
-		exit(-1);
-	}
-
-	if( bind(listenSocketFileDescriptor, (struct sockaddr *) &serverAddress, \
-				sizeof(serverAddress)) < 0 )
-	{
-		fprintf(stderr, "can't bind to port %d\n", LISTEN_PORT);
-		exit(-1);
-	}
-
-	if( listen(listenSocketFileDescriptor, LISTEN_QUEUE) < 0)
-	{
-		fprintf(stderr, "error converting to passive socket\n");
-		exit(-1);
-	}
-
-}
-
-void removeSocket(int fileDescriptor)
-{
-	close(fileDescriptor);
-	FD_CLR(fileDescriptor, &readSet);
-
-	if(fileDescriptor == maxFileDescriptor)
-		maxFileDescriptor--;
 }
 
 void mainLoop()

@@ -49,7 +49,7 @@ typedef struct userlist userList;
 user* addNewUser(userList* list);
 void moveUser(userList* from, userList* to, user* theUser);
 user* findUserByName(const char* name, userList* list);
-user* findUserByFileDescriptor(int fileDescriptor, userList* list);
+user* findUserByControlSocketFileDescriptor(int fileDescriptor, userList* list);
 
 void printUserList(userList* list);
 
