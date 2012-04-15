@@ -92,7 +92,7 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 		reply(currentUser -> controlSocket, STARTING_DATA, "here comes listing");
 
 		// FIXME hehe
-		char buffer[BUFFER_SIZE] = {"the file listing function is still under development...now just send BLANK data back like this"};
+		char buffer[BUFFER_SIZE] = {"the file listing function is still under development...now just send BLANK data back like this\r\n"};
 		int n = 0, total = 0;
 		int dataSize = strlen(buffer);
 		for(total = 0; total < dataSize;)
