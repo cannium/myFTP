@@ -20,6 +20,7 @@ struct userInformation
 	char currentPath[PATH_LENGTH];	// full path of current working directory
 	int writeAccess;				// ENABLE or DISABLE 
 	int readAccess;					// ENABLE or DISABLE
+	char renameFile[PATH_LENGTH];	// file to be renamed
 	int controlSocket;				// control connection file descriptor
 	int	dataSocket;					// data-transfer connection file descriptor,
 									// used in passive mode

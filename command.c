@@ -35,14 +35,13 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 	if(DEBUG)
 		printf("%s|%s|\n", request, parameter);
 
-	char* tempdir = NULL;
-
 	if( strcmp(request, "PASS") == 0)		// password
 	{
 		if( strcmp(parameter, currentUser -> password) == 0)
 		{
 			currentUser -> loginTime = time(NULL);
-			strcpy(currentUser -> currentPath, currentUser -> homeDirectory);
+			strcpy(currentUser -> currentPath,	\
+					currentUser -> homeDirectory);
 			reply(currentUser -> controlSocket, LOGIN_SUCCESS,	\
 				   	"login successful");
 		}
@@ -98,7 +97,8 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 						(struct sockaddr *) &dataSocketAddress, \
 						&len);
 		
-		reply(currentUser -> controlSocket, STARTING_DATA, "here comes listing");
+		reply(currentUser -> controlSocket, STARTING_DATA,	\
+				"here comes listing");
 
 		DIR *dp;
 		struct dirent *dirp;
@@ -107,9 +107,9 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 		int n = 0;
 		while( (dirp = readdir(dp)) != NULL)
 		{
-			sprintf(buffer, "%-20s", dirp -> d_name);
+			sprintf(buffer, "%-25s", dirp -> d_name);
 
-			if( n % 2 == 0)
+			if( n % 3 == 0)
 			{
 				strcat(buffer, "\r\n");
 			}
@@ -120,16 +120,34 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 		write(fd, buffer, strlen(buffer));
 
 		close(fd);
-		reply(currentUser -> controlSocket, CLOSING_DATA, "directory send OK");
+		reply(currentUser -> controlSocket, CLOSING_DATA,	\
+				"directory send OK");
 		exit(0);
 	}
 	else if( strcmp(request, "RNFR") == 0)	// rename from
 	{
-		
+		chdir(currentUser -> currentPath);		
+		if( (access(parameter, F_OK)) == 0)
+		{
+			strcpy(currentUser -> renameFile, parameter);
+			reply(currentUser -> controlSocket, FURTHER_INFO,	\
+					"ready for RNTO");
+		}
+		else
+			reply(currentUser -> controlSocket, OPERATE_FAILED,	\
+					"RNFR command failed");
 	}
 	else if( strcmp(request, "RNTO") == 0)	// rename to
 	{
-		
+		chdir(currentUser -> currentPath);
+		if( rename(currentUser -> renameFile, parameter) == 0)
+		{
+			reply(currentUser -> controlSocket, OPERATE_SUCCESS,	\
+					"rename successful");
+		}
+		else
+			reply(currentUser -> controlSocket, OPERATE_FAILED,		\
+					"rename failed");
 	}
 	else if( strcmp(request, "PASV") == 0)	// passive mode
 	{
@@ -179,19 +197,14 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 	{
 		
 	}
-	else if( strcmp(request, "DELE") == 0)	// delete file
+	else if( strcmp(request, "DELE") == 0 ||	\
+			 strcmp(request, "RMD") == 0)	// delete file or directory
 	{
 		chdir(currentUser -> currentPath);
-		if(parameter[0] != '/')
-		{
-			tempdir = strcat(currentUser -> currentPath, "/");
-			tempdir = strcat(currentUser -> currentPath, parameter);
-		}
-		else
-			tempdir = parameter;
-		if((access(tempdir, F_OK)) == 0)
+
+		if((access(parameter, F_OK)) == 0)
 		{ 
-			if(unlink(parameter) == 0)
+			if(remove(parameter) == 0)
 				reply(currentUser -> controlSocket, OPERATE_SUCCESS, \
 						"delete success!");
 			else
@@ -199,7 +212,7 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 						"delete failure!");
 		}
 		else
-			reply(currentUser -> controlSocket, OPERATE_FAILED,		\
+			reply(currentUser -> controlSocket, OPERATE_FAILED,	\
 					"No such file or directory!");
 	}
 	else if( strcmp(request, "MKD") == 0)	// make directory
@@ -207,31 +220,15 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 		chdir(currentUser -> currentPath);
 
 		if(mkdir(parameter,DIR_MASK)==0) 
-			reply(currentUser -> controlSocket, MKD_SUCCESS, "mkdir success");
+			reply(currentUser -> controlSocket, MKD_SUCCESS,	\
+					"mkdir success");
 		else
-			reply(currentUser -> controlSocket, OPERATE_FAILED, "mkdir failure");
-	}
-	else if( strcmp(request, "RMD") == 0)	// remove directory
-	{
-		chdir(currentUser -> currentPath);
-		
-		DIR *dir = NULL;
-		dir = opendir(parameter);
-		if(dir != NULL)
-		{
-			if(rmdir(parameter) == 0)
-				reply(currentUser -> controlSocket, OPERATE_SUCCESS, \
-						"rmdir success!");
-			else
-				reply(currentUser -> controlSocket, OPERATE_FAILED, \
-						"rmdir failure!");
-		}
-		else
-			reply(currentUser -> controlSocket, OPERATE_FAILED,\
-					"No such directory!");
+			reply(currentUser -> controlSocket, OPERATE_FAILED,	\
+					"mkdir failure");
 	}
 	else if( strcmp(request, "QUIT") == 0)	// client logout
 	{
+		reply(currentUser -> controlSocket, SERVIVE_CLOSE, "goodbye");
 		memset(currentUser -> currentPath, 0, PATH_LENGTH);
 		removeSocket(currentUser -> controlSocket);
 		currentUser -> controlSocket = 0;
@@ -287,20 +284,3 @@ void removeSocket(int fileDescriptor)
 		maxFileDescriptor--;
 }
 
-/*
-static void getFullPath(const char* currenPath, const char* newPath, \
-						char* fullPath)
-{
-	if(newPath[0] == '/')
-		return;
-
-	if( strcmp(newPath, ".") == 0)
-		return;
-
-	if( strcmp(newPath, "..") == 0)
-		
-	
-	sprintf(fullPath, "%s/%s", currenPath, newPath);
-	return;	
-}
-*/
