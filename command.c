@@ -42,6 +42,7 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 		if( strcmp(parameter, currentUser -> password) == 0)
 		{
 			currentUser -> loginTime = time(NULL);
+			strcpy(currentUser -> currentPath, currentUser -> homeDirectory);
 			reply(currentUser -> controlSocket, LOGIN_SUCCESS,	\
 				   	"login successful");
 		}
@@ -53,10 +54,12 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 	}
 	else if( strcmp(request, "CWD") == 0)	// change working directory
 	{
+		chdir(currentUser -> currentPath);
 		if( ( chdir(parameter) ) == 0 )
 		{
-			// FIXME get full path then copy
-			strcpy(currentUser -> currentPath, parameter);
+			char path[PATH_LENGTH];
+			getcwd(path, sizeof(path));
+			strcpy(currentUser -> currentPath, path);
 			reply(currentUser -> controlSocket, OPERATE_SUCCESS,	\
 					"Change working directory success!");
 		}
@@ -66,6 +69,12 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 					"Change working directory failure!");
 		}
 		
+	}
+	else if( strcmp(request, "PWD") == 0)	// print working directory
+	{
+		char message[BUFFER_SIZE];
+		sprintf(message, "\"%s\"", currentUser -> currentPath);
+		reply(currentUser -> controlSocket, MKD_SUCCESS, message);
 	}
 	else if( strcmp(request, "LIST") == 0)	// list files amd directories
 	{
@@ -91,15 +100,25 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 		
 		reply(currentUser -> controlSocket, STARTING_DATA, "here comes listing");
 
-		// FIXME hehe
-		char buffer[BUFFER_SIZE] = {"the file listing function is still under development...now just send BLANK data back like this\r\n"};
-		int n = 0, total = 0;
-		int dataSize = strlen(buffer);
-		for(total = 0; total < dataSize;)
+		DIR *dp;
+		struct dirent *dirp;
+		dp = opendir(currentUser -> currentPath);
+		char buffer[BUFFER_SIZE] = {0};
+		int n = 0;
+		while( (dirp = readdir(dp)) != NULL)
 		{
-			n = write(fd, buffer + total, 10);
-			total += n;
+			sprintf(buffer, "%-20s", dirp -> d_name);
+
+			if( n % 2 == 0)
+			{
+				strcat(buffer, "\r\n");
+			}
+			write(fd, buffer, strlen(buffer));
+			n++;
 		}
+		sprintf(buffer, "\r\n");
+		write(fd, buffer, strlen(buffer));
+
 		close(fd);
 		reply(currentUser -> controlSocket, CLOSING_DATA, "directory send OK");
 		exit(0);
@@ -125,14 +144,21 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 
 		struct sockaddr_in localAddress;
 		socklen_t addressLength;
+		addressLength = sizeof(localAddress);
 		getsockname(newServerfd, (struct sockaddr*)&localAddress,	\
 						&addressLength);
 
 		char message[BUFFER_SIZE] = {0};
+		char addressBuffer[BUFFER_SIZE] = {0};
 		int localPort = ntohs(localAddress.sin_port);
-		// FIXME we always return local address as 0.0.0.0
-		sprintf(message, "entering passive mode (0,0,0,0,%d,%d).",	\
-				localPort / 256, localPort % 256);
+		sprintf(addressBuffer,"%s", inet_ntoa( localAddress.sin_addr));
+		int i;
+		for(i = 0; i < strlen(addressBuffer);i++)
+			if(addressBuffer[i] == '.')
+				addressBuffer[i] = ',';
+
+		sprintf(message, "entering passive mode (%s,%d,%d).",	\
+				addressBuffer, localPort / 256, localPort % 256);
 		reply(currentUser -> controlSocket, ENTER_PASSIVE, message);
 		
 		currentUser -> dataSocket = newServerfd;
@@ -155,6 +181,7 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 	}
 	else if( strcmp(request, "DELE") == 0)	// delete file
 	{
+		chdir(currentUser -> currentPath);
 		if(parameter[0] != '/')
 		{
 			tempdir = strcat(currentUser -> currentPath, "/");
@@ -166,53 +193,42 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 		{ 
 			if(unlink(parameter) == 0)
 				reply(currentUser -> controlSocket, OPERATE_SUCCESS, \
-						"delete success!\n");
+						"delete success!");
 			else
 				reply(currentUser -> controlSocket, OPERATE_FAILED,	\
-						"delete failure!\n");
+						"delete failure!");
 		}
 		else
 			reply(currentUser -> controlSocket, OPERATE_FAILED,		\
-					"No such file or directory!\n");
+					"No such file or directory!");
 	}
 	else if( strcmp(request, "MKD") == 0)	// make directory
 	{
-		if(parameter[0]!='/')
-		{
-			tempdir = strcat(currentUser -> currentPath, "/");
-			tempdir = strcat(currentUser -> currentPath, parameter);
-		}
-		else
-			tempdir = parameter;
+		chdir(currentUser -> currentPath);
 
-		if(mkdir(tempdir,0)==0) 
-			reply(currentUser -> controlSocket, MKD_SUCCESS, "mkdir success!");
+		if(mkdir(parameter,DIR_MASK)==0) 
+			reply(currentUser -> controlSocket, MKD_SUCCESS, "mkdir success");
 		else
-			reply(currentUser -> controlSocket, OPERATE_FAILED, "mkdir failure!");
+			reply(currentUser -> controlSocket, OPERATE_FAILED, "mkdir failure");
 	}
 	else if( strcmp(request, "RMD") == 0)	// remove directory
 	{
-		if(parameter[0] != '/')
-		{
-			tempdir = strcat(currentUser -> currentPath, "/");
-			tempdir = strcat(currentUser -> currentPath, parameter);
-		}
-		else
-			tempdir = parameter;
+		chdir(currentUser -> currentPath);
+		
 		DIR *dir = NULL;
 		dir = opendir(parameter);
-		if(dir == NULL)
+		if(dir != NULL)
 		{
 			if(rmdir(parameter) == 0)
 				reply(currentUser -> controlSocket, OPERATE_SUCCESS, \
-						"rmdir success!\n");
+						"rmdir success!");
 			else
 				reply(currentUser -> controlSocket, OPERATE_FAILED, \
-						"rmdir failure!\n");
+						"rmdir failure!");
 		}
 		else
 			reply(currentUser -> controlSocket, OPERATE_FAILED,\
-					"No such directory!\n");
+					"No such directory!");
 	}
 	else if( strcmp(request, "QUIT") == 0)	// client logout
 	{
@@ -234,7 +250,7 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 void reply(int socketFileDescriptor, int replyCode, const char* message)
 {
 	char buffer[BUFFER_SIZE];
-	sprintf(buffer, "%d %s\n", replyCode, message);
+	sprintf(buffer, "%d %s\r\n", replyCode, message);
 	write(socketFileDescriptor, buffer, strlen(buffer));
 }
 
@@ -270,3 +286,21 @@ void removeSocket(int fileDescriptor)
 	if(fileDescriptor == maxFileDescriptor)
 		maxFileDescriptor--;
 }
+
+/*
+static void getFullPath(const char* currenPath, const char* newPath, \
+						char* fullPath)
+{
+	if(newPath[0] == '/')
+		return;
+
+	if( strcmp(newPath, ".") == 0)
+		return;
+
+	if( strcmp(newPath, "..") == 0)
+		
+	
+	sprintf(fullPath, "%s/%s", currenPath, newPath);
+	return;	
+}
+*/

@@ -17,9 +17,15 @@
 #define LOGIN_FAILED	530
 #define OPERATE_FAILED	550
 
+#define DIR_MASK		0777
+
 void handleCommand(user* currentUser, const char* buffer, ssize_t size);
 void reply(int socketFileDescriptor, int replyCode, const char* message);
 int startServer(struct sockaddr_in* address);
 void removeSocket(int fileDescriptor);
+
+//static void getFullPath(const char* currenPath, const char* newPath, \
+//						char* fullPath);
+
 
 #endif
