@@ -161,18 +161,26 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 
 		int newServerfd = startServer(&newServer);
 
-		struct sockaddr_in localAddress;
+		struct sockaddr_in localAddressOfControlSocket;
+		struct sockaddr_in localAddressOfNewServer;
+
 		socklen_t addressLength;
-		addressLength = sizeof(localAddress);
-		getsockname(newServerfd, (struct sockaddr*)&localAddress,	\
+		addressLength = sizeof(localAddressOfControlSocket);
+		getsockname(currentUser -> controlSocket,	\
+				(struct sockaddr*)&localAddressOfControlSocket,	\
 						&addressLength);
+		addressLength = sizeof(localAddressOfNewServer);
+		getsockname(newServerfd,	\
+				(struct sockaddr*)&localAddressOfNewServer,	\
+					&addressLength);
 
 		char message[BUFFER_SIZE] = {0};
 		char addressBuffer[BUFFER_SIZE] = {0};
-		int localPort = ntohs(localAddress.sin_port);
-		sprintf(addressBuffer,"%s", inet_ntoa( localAddress.sin_addr));
+		int localPort = ntohs(localAddressOfNewServer.sin_port);
+		sprintf(addressBuffer,"%s", inet_ntoa(	\
+					localAddressOfControlSocket.sin_addr));
 		int i;
-		for(i = 0; i < strlen(addressBuffer);i++)
+		for(i = 0; i < strlen(addressBuffer); i++)
 			if(addressBuffer[i] == '.')
 				addressBuffer[i] = ',';
 
@@ -186,8 +194,9 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 		if(DEBUG)
 		{
 			printf("local address: %s\n", \
-					inet_ntoa( localAddress.sin_addr) );
-			printf("local port: %d\n", (int) ntohs(localAddress.sin_port));
+					inet_ntoa( localAddressOfControlSocket.sin_addr) );
+			printf("local port: %d\n", (int) ntohs(	\
+						localAddressOfNewServer.sin_port));
 		}
 	}
 	else if( strcmp(request, "TYPE") == 0)	// data transfer type

@@ -7,9 +7,9 @@ $(EXEC): $(OBJS)
 
 main.o: main.c global.h
 		$(CC) -c $<
-users.o: users.c users.h
+users.o: users.c users.h global.h
 		$(CC) -c $<
-command.o: command.c command.h
+command.o: command.c command.h global.h
 		$(CC) -c $<
 
 clean:

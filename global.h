@@ -1,7 +1,7 @@
 #ifndef GLOBAL_H
 #define GLOBAL_H
 
-#define DEBUG			0
+#define DEBUG			1
 
 #define BUFFER_SIZE		1024
 #define REQUEST_BUFF	8
