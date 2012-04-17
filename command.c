@@ -4,8 +4,10 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <arpa/inet.h>
 #include <sys/select.h>
+#include<fcntl.h>
 
 #include "global.h"
 #include "command.h"
@@ -20,15 +22,6 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 {
 	printf("handling user %s : %s\n", currentUser -> username, buffer);
 
-/*	pid_t pid = fork();
-	if(pid < 0)
-	{
-		fprintf(stderr, "fork failed\n");
-		exit(-1);
-	}
-	else if(pid != 0)	// parent
-		return;
-*/
 	char request[REQUEST_BUFF] = {0}, parameter[BUFFER_SIZE] = {0};
 	sscanf(buffer, "%4s %1023s", request, parameter);
 
@@ -44,6 +37,18 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 					currentUser -> homeDirectory);
 			reply(currentUser -> controlSocket, LOGIN_SUCCESS,	\
 				   	"login successful");
+			printf("user %s logged in\n", currentUser -> username);
+
+			struct sockaddr_in peerAddress;
+			socklen_t addressLength;
+			addressLength = sizeof(peerAddress);
+			getpeername(currentUser -> controlSocket,	\
+					(struct sockaddr*)&peerAddress,		\
+					&addressLength);
+
+			printf("IP address: %s:%d\n\n",	\
+					inet_ntoa( peerAddress.sin_addr),	\
+					(int) ntohs(peerAddress.sin_port));
 		}
 		else
 		{
@@ -91,12 +96,8 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 			return;
 		}
 
-		struct sockaddr dataSocketAddress;
-		socklen_t len = sizeof(dataSocketAddress);
-		int fd = accept( currentUser -> dataSocket, \
-						(struct sockaddr *) &dataSocketAddress, \
-						&len);
-		
+		int fd = acceptNew( currentUser -> dataSocket);
+			
 		reply(currentUser -> controlSocket, STARTING_DATA,	\
 				"here comes listing");
 
@@ -189,13 +190,117 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 			printf("local port: %d\n", (int) ntohs(localAddress.sin_port));
 		}
 	}
+	else if( strcmp(request, "TYPE") == 0)	// data transfer type
+	{
+		switch(parameter[0])
+		{
+			case 'I':
+				reply(currentUser -> controlSocket, COMMAND_OK, \
+						"always binary mode");
+				break;
+			default:
+				reply(currentUser -> controlSocket, SYNTAX_ERROR, \
+						"unrecognised TYPE command");
+		}		
+	}
+	else if( strcmp(request, "SIZE") == 0)	// file size
+	{
+		chdir(currentUser -> currentPath);
+		struct stat fileStatus;
+		if( stat(parameter, &fileStatus) == 0)
+		{
+			char message[BUFFER_SIZE];
+			sprintf(message, "%d", (int)fileStatus.st_size);
+			reply(currentUser -> controlSocket, FILE_STATUS, message);
+		}
+		else
+			reply(currentUser -> controlSocket, OPERATE_FAILED,	\
+					"could not get file size");
+	}
 	else if( strcmp(request, "RETR") == 0)	// retrieve file
 	{
-		
+		pid_t pid = fork();
+		if(pid < 0)
+		{
+			fprintf(stderr, "fork failed\n");
+			exit(-1);
+		}
+		else if(pid != 0)	// parent
+			return;
+
+		int datafd = acceptNew( currentUser -> dataSocket);
+
+		chdir(currentUser -> currentPath);	
+		int filefd;
+		if( (filefd = open(parameter, O_RDONLY)) < 0)
+		{
+			reply(currentUser -> controlSocket, OPERATE_FAILED,	\
+					"failed to open file");
+			exit(0);
+		}
+		else
+			reply(currentUser -> controlSocket, STARTING_DATA,	\
+					"starting transfer file");
+
+		int size;
+		char buffer[BUFFER_SIZE];
+		while( size = read(filefd, buffer, BUFFER_SIZE))
+		{
+			if( size < 0)
+				{
+					fprintf(stderr, "read error\n");
+					exit(-1);
+				}
+
+			write(datafd, buffer, size);
+		}
+		reply(currentUser -> controlSocket, CLOSING_DATA,	\
+				"file transfer complete");
+		exit(0);
 	}
 	else if( strcmp(request, "STOR") == 0)	// store file
 	{
+		pid_t pid = fork();
+		if(pid < 0)
+		{
+			fprintf(stderr, "fork failed\n");
+			exit(-1);
+		}
+		else if(pid != 0)	// parent
+			return;
+
+		int datafd = acceptNew( currentUser -> dataSocket);
+
+		chdir(currentUser -> currentPath);	
+		int filefd;
+		if( (filefd = open(parameter, O_WRONLY | O_CREAT | O_TRUNC, \
+						FILE_MASK)) < 0)
+		{
+			reply(currentUser -> controlSocket, OPERATE_FAILED,	\
+					"failed to open file");
+			exit(0);
+		}
+		else
+			reply(currentUser -> controlSocket, STARTING_DATA,	\
+					"OK to receive data");
 		
+		int size;
+		char buffer[BUFFER_SIZE];
+		while( size = read(datafd, buffer, BUFFER_SIZE))
+		{
+			if( size < 0)
+				{
+					fprintf(stderr, "read error\n");
+					exit(-1);
+				}
+
+			write(filefd, buffer, size);
+		}
+				
+		reply(currentUser -> controlSocket, CLOSING_DATA,	\
+				"file transfer complete");
+
+		exit(0);
 	}
 	else if( strcmp(request, "DELE") == 0 ||	\
 			 strcmp(request, "RMD") == 0)	// delete file or directory
@@ -219,7 +324,7 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 	{
 		chdir(currentUser -> currentPath);
 
-		if(mkdir(parameter,DIR_MASK)==0) 
+		if(mkdir(parameter,DIR_MASK) == 0) 
 			reply(currentUser -> controlSocket, MKD_SUCCESS,	\
 					"mkdir success");
 		else
@@ -284,3 +389,12 @@ void removeSocket(int fileDescriptor)
 		maxFileDescriptor--;
 }
 
+static int acceptNew(int listenSocketFileDescriptor)
+{
+	struct sockaddr dataSocketAddress;
+	socklen_t len = sizeof(dataSocketAddress);
+	int fd = accept( listenSocketFileDescriptor, \
+			(struct sockaddr *) &dataSocketAddress, \
+			&len);
+	return fd;
+}

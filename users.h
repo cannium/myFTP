@@ -22,8 +22,8 @@ struct userInformation
 	int readAccess;					// ENABLE or DISABLE
 	char renameFile[PATH_LENGTH];	// file to be renamed
 	int controlSocket;				// control connection file descriptor
-	int	dataSocket;					// data-transfer connection file descriptor,
-									// used in passive mode
+	int	dataSocket;					// data-transfer listen socket file 
+									// descriptor, used in passive mode
 	int dataPortNumber;				// port number for data transmission,
 									// used in active mode	
 	int ftpMode;					// ACTIVE_MODE or PASSIVE_MODE

@@ -22,20 +22,25 @@ extern userList unconnectedUser;
 
 void initialize();
 void mainLoop();
+void singalInterruptionHandler(int signo);
 
 
 int main(int argc, char* argv[])
 {
 	initialize();
 	listenSocketFileDescriptor = startServer(&serverAddress);
+	printf("server started\n");
 	mainLoop();
 }
 
 void initialize()
 {
 	/* TODO:
-	   setup SIGINT SIGCHLD handler;
+	   setup SIGCHLD handler;
 	*/
+
+	signal(SIGINT, singalInterruptionHandler);
+
 	FILE* configurationFile;
 	configurationFile = fopen("ftp.conf", "r");
 	if(!configurationFile)
@@ -82,7 +87,6 @@ void initialize()
 	serverAddress.sin_family = AF_INET;
 	serverAddress.sin_addr.s_addr = htonl(INADDR_ANY);
 	serverAddress.sin_port = htons(LISTEN_PORT);
-
 }
 
 void mainLoop()
@@ -217,4 +221,17 @@ void mainLoop()
 		}
 
 	}
+}
+
+void singalInterruptionHandler(int signo)
+{
+	user* current;
+	for(current = connectedUser.first; current; current = current -> next)
+	{
+		reply(current -> controlSocket, SERVIVE_CLOSE, "server is closed");
+		close(current -> controlSocket);
+	}
+	close(listenSocketFileDescriptor);
+	printf("\nserver is closed\n");
+	exit(0);
 }
