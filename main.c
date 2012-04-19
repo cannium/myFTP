@@ -4,6 +4,7 @@
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <arpa/inet.h>
+#include <signal.h>
 
 #include "global.h"
 #include "users.h"

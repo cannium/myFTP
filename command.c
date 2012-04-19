@@ -7,7 +7,7 @@
 #include <sys/stat.h>
 #include <arpa/inet.h>
 #include <sys/select.h>
-#include<fcntl.h>
+#include <fcntl.h>
 
 #include "global.h"
 #include "command.h"
@@ -80,7 +80,7 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 		sprintf(message, "\"%s\"", currentUser -> currentPath);
 		reply(currentUser -> controlSocket, MKD_SUCCESS, message);
 	}
-	else if( strcmp(request, "LIST") == 0)	// list files amd directories
+	else if( strcmp(request, "LIST") == 0)	// list files and directories
 	{
 		pid_t pid = fork();
 		if(pid < 0)
