@@ -28,7 +28,6 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size);
 void reply(int socketFileDescriptor, int replyCode, const char* message);
 int startServer(struct sockaddr_in* address);
 void removeSocket(int fileDescriptor);
-
-static int acceptNew(int listenSocketFileDescriptor);
+int acceptNew(int listenSocketFileDescriptor);
 
 #endif

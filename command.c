@@ -32,6 +32,11 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 	{
 		if( strcmp(parameter, currentUser -> password) == 0)
 		{
+			// if password is correct,
+			// reply 230 login success
+			// set environments for user
+			// print user information on server's screen
+
 			currentUser -> loginTime = time(NULL);
 			strcpy(currentUser -> currentPath,	\
 					currentUser -> homeDirectory);
@@ -52,8 +57,16 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 		}
 		else
 		{
+			// if password not correct
+			// reply 530 login failed
+			// close socket file descriptor
+			// move user from connectedUser to unconnectedUser
+
 			reply(currentUser -> controlSocket, LOGIN_FAILED,	\
 					"login failed");
+			removeSocket(currentUser -> controlSocket);
+			currentUser -> controlSocket = 0;
+			moveUser(&connectedUser, &unconnectedUser, currentUser);
 		}
 	}
 	else if( strcmp(request, "CWD") == 0)	// change working directory
@@ -82,6 +95,8 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 	}
 	else if( strcmp(request, "LIST") == 0)	// list files and directories
 	{
+		// since sending file list needs blocking system call,
+		// fork a child process first
 		pid_t pid = fork();
 		if(pid < 0)
 		{
@@ -96,11 +111,12 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 			return;
 		}
 
-		int fd = acceptNew( currentUser -> dataSocket);
+		int fd = acceptNew(currentUser -> dataSocket);
 			
 		reply(currentUser -> controlSocket, STARTING_DATA,	\
 				"here comes listing");
 
+		// get list and send
 		DIR *dp;
 		struct dirent *dirp;
 		dp = opendir(currentUser -> currentPath);
@@ -110,7 +126,7 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 		{
 			sprintf(buffer, "%-25s", dirp -> d_name);
 
-			if( n % 3 == 0)
+			if( n % 3 == 0)		// 3 columns a line
 			{
 				strcat(buffer, "\r\n");
 			}
@@ -128,7 +144,7 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 	else if( strcmp(request, "RNFR") == 0)	// rename from
 	{
 		chdir(currentUser -> currentPath);		
-		if( (access(parameter, F_OK)) == 0)
+		if( (access(parameter, F_OK)) == 0) // test if file exists
 		{
 			strcpy(currentUser -> renameFile, parameter);
 			reply(currentUser -> controlSocket, FURTHER_INFO,	\
@@ -152,6 +168,7 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 	}
 	else if( strcmp(request, "PASV") == 0)	// passive mode
 	{
+		// start a new server, waiting for client
 		struct sockaddr_in newServer;
 		memset(&newServer, 0, sizeof(newServer));
 		newServer.sin_family = AF_INET;
@@ -164,6 +181,9 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 		struct sockaddr_in localAddressOfControlSocket;
 		struct sockaddr_in localAddressOfNewServer;
 
+		// get local ip and listen port,
+		// convert to format (IP,IP,IP,IP,port,port)
+		// and reply to client
 		socklen_t addressLength;
 		addressLength = sizeof(localAddressOfControlSocket);
 		getsockname(currentUser -> controlSocket,	\
@@ -228,6 +248,7 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 	}
 	else if( strcmp(request, "RETR") == 0)	// retrieve file
 	{
+		// fork a child process
 		pid_t pid = fork();
 		if(pid < 0)
 		{
@@ -235,10 +256,15 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 			exit(-1);
 		}
 		else if(pid != 0)	// parent
+		{
+			close(currentUser -> dataSocket);
+			currentUser -> dataSocket = 0;
 			return;
+		}
 
-		int datafd = acceptNew( currentUser -> dataSocket);
+		int datafd = acceptNew(currentUser -> dataSocket);
 
+		// open and read file, save to buffer, send to client
 		chdir(currentUser -> currentPath);	
 		int filefd;
 		if( (filefd = open(parameter, O_RDONLY)) < 0)
@@ -269,6 +295,7 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 	}
 	else if( strcmp(request, "STOR") == 0)	// store file
 	{
+		// fork a child process
 		pid_t pid = fork();
 		if(pid < 0)
 		{
@@ -276,10 +303,15 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 			exit(-1);
 		}
 		else if(pid != 0)	// parent
+		{
+			close(currentUser -> dataSocket);
+			currentUser -> dataSocket = 0;
 			return;
+		}
 
-		int datafd = acceptNew( currentUser -> dataSocket);
+		int datafd = acceptNew(currentUser -> dataSocket);
 
+		// open file, receive data, save to buffer, write to file
 		chdir(currentUser -> currentPath);	
 		int filefd;
 		if( (filefd = open(parameter, O_WRONLY | O_CREAT | O_TRUNC, \
@@ -314,6 +346,10 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 	else if( strcmp(request, "DELE") == 0 ||	\
 			 strcmp(request, "RMD") == 0)	// delete file or directory
 	{
+		// since we can use a same system call remove() to 
+		// delete file and delete directory,
+		// we handle DELE and RMD together
+		
 		chdir(currentUser -> currentPath);
 
 		if((access(parameter, F_OK)) == 0)
@@ -342,6 +378,10 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 	}
 	else if( strcmp(request, "QUIT") == 0)	// client logout
 	{
+		// reply 221 goodbye to user
+		// close control socket of user
+		// clean user information data structure
+		// move user from connectedUser to unconnectedUser
 		reply(currentUser -> controlSocket, SERVIVE_CLOSE, "goodbye");
 		memset(currentUser -> currentPath, 0, PATH_LENGTH);
 		removeSocket(currentUser -> controlSocket);
@@ -349,7 +389,7 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 		moveUser(&connectedUser, &unconnectedUser, currentUser);
 		printf("user %s logged out\n", currentUser -> username);
 	}
-	else
+	else	// if client sends something else
 	{
 		reply(currentUser -> controlSocket, NOT_IMPLEMENT, \
 				"command not implemented");
@@ -358,6 +398,7 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 	return;
 }
 
+// send message with replyCode (defined in command.h) using a socket
 void reply(int socketFileDescriptor, int replyCode, const char* message)
 {
 	char buffer[BUFFER_SIZE];
@@ -365,6 +406,8 @@ void reply(int socketFileDescriptor, int replyCode, const char* message)
 	write(socketFileDescriptor, buffer, strlen(buffer));
 }
 
+// start a listen socket using "address"
+// return socket file descriptor
 int startServer(struct sockaddr_in* address)
 {
 	int socketfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -389,6 +432,7 @@ int startServer(struct sockaddr_in* address)
 	return socketfd;
 }
 
+// close socket and clear corresponding flag in readSet
 void removeSocket(int fileDescriptor)
 {
 	close(fileDescriptor);
@@ -398,7 +442,8 @@ void removeSocket(int fileDescriptor)
 		maxFileDescriptor--;
 }
 
-static int acceptNew(int listenSocketFileDescriptor)
+// accept new connection and return socket file descriptor
+int acceptNew(int listenSocketFileDescriptor)
 {
 	struct sockaddr dataSocketAddress;
 	socklen_t len = sizeof(dataSocketAddress);

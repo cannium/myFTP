@@ -35,10 +35,11 @@ int main(int argc, char* argv[])
 }
 
 void initialize()
+//	setup signal handler
+//	read configuration file (ftp.conf), add users to unconnectedUser
+//	set listenSocketFileDescriptor address
 {
-	/* TODO:
-	   setup SIGCHLD handler;
-	*/
+	// TODO: setup SIGCHLD handler
 
 	signal(SIGINT, singalInterruptionHandler);
 
@@ -100,7 +101,10 @@ void mainLoop()
 	FD_ZERO(&readSet);
 	FD_SET(listenSocketFileDescriptor, &readSet);
 
+	// store the file descriptor of incoming connection that has 
+	// not logged in
 	int unknownUserFileDescriptor[FD_SET_SIZE] = {0};
+
 	while(1)
 	{
 		tempSet = readSet;
@@ -114,11 +118,13 @@ void mainLoop()
 
 		if( FD_ISSET(listenSocketFileDescriptor, &tempSet))
 		{
-			socklen_t addressLength = sizeof(clientAddress);
-			int connectingFileDescriptor;
-			connectingFileDescriptor = accept(listenSocketFileDescriptor, \
-									(struct sockaddr *) &clientAddress,	\
-									&addressLength);
+			// server listen socket has new incoming connection
+			// accept the connection, reply 220 welcome
+			// put the file descriptor into unknownUserFileDescriptor
+
+			int connectingFileDescriptor = 
+						acceptNew(listenSocketFileDescriptor);
+
 			if(connectingFileDescriptor < 0)
 			{
 				fprintf(stderr, "accept error\n");
@@ -144,6 +150,8 @@ void mainLoop()
 				continue;
 		}
 
+		// for all users in connectedUser, test if new data comes
+		// handle the request using handleCommand()
 		user* current;
 		for(current = connectedUser.first; current; 
 							current = current -> next)
@@ -173,7 +181,9 @@ void mainLoop()
 			}
 		}
 
-				
+		// for all file descriptors in unknownUserFileDescriptor,
+		// test if new data comes,
+		// handle USER command
 		for(i = 0; i < FD_SET_SIZE; i++)
 		{
 			int fd = unknownUserFileDescriptor[i];
@@ -190,6 +200,11 @@ void mainLoop()
 			}
 			else
 			{
+				// handle USER command
+				// reply 331 need password
+				// test if username exists,
+				// if yes, move user from unconnectedUser to connectedUser
+				// if not, close the connection
 				char temp[REQUEST_BUFF], name[NAME_LENGTH];
 				sscanf(buffer, "%4s %63s", temp, name);
 				if( strcmp(temp, "USER") == 0)
@@ -212,6 +227,7 @@ void mainLoop()
 				break;
 		}
 
+		// DEBUG is defined in global.h
 		if(DEBUG)
 		{
 			printf("unconnectedUser:\n");
@@ -224,8 +240,11 @@ void mainLoop()
 	}
 }
 
+// handle SIGINT (^c)
 void singalInterruptionHandler(int signo)
 {
+	// for all connectedUser, send 221 service close,
+	// then exit
 	user* current;
 	for(current = connectedUser.first; current; current = current -> next)
 	{
