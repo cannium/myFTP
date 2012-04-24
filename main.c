@@ -110,11 +110,18 @@ void mainLoop()
 		tempSet = readSet;
 		int readyNumber = select(maxFileDescriptor + 1, &tempSet, NULL, \
 									NULL, NULL);
+
+		if(DEBUG)
+			printf("readyNumber = %d\n", readyNumber);
+
 		if(readyNumber < 0)
 		{
 			fprintf(stderr, "select error\n");
 			exit(-1);
 		}
+
+		if(DEBUG)
+			printf("now check listenSocketFileDescriptor\n");
 
 		if( FD_ISSET(listenSocketFileDescriptor, &tempSet))
 		{
@@ -150,6 +157,9 @@ void mainLoop()
 				continue;
 		}
 
+		if(DEBUG)
+			printf("now check connectedUser\n");
+
 		// for all users in connectedUser, test if new data comes
 		// handle the request using handleCommand()
 		user* current;
@@ -181,6 +191,9 @@ void mainLoop()
 			}
 		}
 
+		if(DEBUG)
+			printf("now check unknownUserFileDescriptor\n");
+
 		// for all file descriptors in unknownUserFileDescriptor,
 		// test if new data comes,
 		// handle USER command
@@ -207,6 +220,10 @@ void mainLoop()
 				// if not, close the connection
 				char temp[REQUEST_BUFF], name[NAME_LENGTH];
 				sscanf(buffer, "%4s %63s", temp, name);
+
+				if(DEBUG)
+					printf("%s %s\n", temp, name);
+
 				if( strcmp(temp, "USER") == 0)
 				{
 					reply(fd, NEED_PASSWORD, "specify your password");
@@ -219,7 +236,10 @@ void mainLoop()
 					}
 				}
 				else
+				{
 					removeSocket(fd);
+					unknownUserFileDescriptor[i] = 0;
+				}
 			}
 							
 			readyNumber--;
