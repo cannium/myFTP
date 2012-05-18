@@ -23,7 +23,7 @@ static double calculateSpeed(struct timeval *before, struct timeval *after, int 
 static int calculateSleepTime(double speedNow, int speedLimit, \
 		int lastSleepTime);
 static void transferFile(int fromFileDescriptor, int toFileDescriptor, \
-						user* currentUser);
+						int speedLimit);
 
 
 void handleCommand(user* currentUser, const char* buffer, ssize_t size)
@@ -286,7 +286,7 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 			reply(currentUser -> controlSocket, STARTING_DATA,	\
 					"starting transfer file");
 
-		transferFile(filefd, datafd, currentUser);
+		transferFile(filefd, datafd, currentUser -> speedLimit);
 
 		reply(currentUser -> controlSocket, CLOSING_DATA,	\
 				"file transfer complete");
@@ -324,7 +324,7 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 			reply(currentUser -> controlSocket, STARTING_DATA,	\
 					"OK to receive data");
 		
-		transferFile(datafd, filefd, currentUser);
+		transferFile(datafd, filefd, currentUser -> speedLimit);
 			
 		reply(currentUser -> controlSocket, CLOSING_DATA,	\
 				"file transfer complete");
@@ -464,7 +464,7 @@ int calculateSleepTime(double speedNow, int speedLimit, int lastSleepTime)
 	return (int)sleepTime;
 }
 
-void transferFile(int fromfd, int tofd, user* currentUser)
+void transferFile(int fromfd, int tofd, int speedLimit)
 {
 		int size;
 		char buffer[BUFFER_SIZE];
@@ -485,13 +485,15 @@ void transferFile(int fromfd, int tofd, user* currentUser)
 
 			write(tofd, buffer, size);
 			fileTransferred += size;			
-			gettimeofday(&timeAfterWrite, NULL);
-			
-			speedNow = calculateSpeed(&timeBeforeTransmission, \
-				   	&timeAfterWrite, fileTransferred);
-			sleepTime = calculateSleepTime(speedNow, \
-					currentUser -> speedLimit, sleepTime);
-			usleep(sleepTime);
+
+			if(speedLimit)
+			{
+				gettimeofday(&timeAfterWrite, NULL);	
+				speedNow = calculateSpeed(&timeBeforeTransmission, \
+					   	&timeAfterWrite, fileTransferred);
+				sleepTime = calculateSleepTime(speedNow, speedLimit, sleepTime);
+				usleep(sleepTime);
+			}
 
 			if(DEBUG)
 			{
