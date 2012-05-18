@@ -5,6 +5,7 @@
 #include <dirent.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <arpa/inet.h>
 #include <sys/select.h>
 #include <fcntl.h>
@@ -17,6 +18,11 @@ extern userList connectedUser, unconnectedUser;
 
 int maxFileDescriptor;
 fd_set readSet;
+
+static double calculateSpeed(struct timeval *before, struct timeval *after, int size);
+static int calculateSleepTime(double speedNow, int speedLimit, \
+		int lastSleepTime);
+
 
 void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 {
@@ -93,7 +99,8 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 		sprintf(message, "\"%s\"", currentUser -> currentPath);
 		reply(currentUser -> controlSocket, MKD_SUCCESS, message);
 	}
-	else if( strcmp(request, "LIST") == 0)	// list files and directories
+	else if( strcmp(request, "LIST") == 0 ||
+				strcmp(request, "NLST") == 0)	// list files and directories
 	{
 		// since sending file list needs blocking system call,
 		// fork a child process first
@@ -279,6 +286,12 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 
 		int size;
 		char buffer[BUFFER_SIZE];
+		int sleepTime = 0;		// in microseconds
+		double speedNow = 0.0;	// in kB/s
+		int fileTransferred = 0;// in bytes
+		struct timeval timeBeforeTransmission, timeAfterWrite;
+
+		gettimeofday(&timeBeforeTransmission,NULL);
 		while( size = read(filefd, buffer, BUFFER_SIZE))
 		{
 			if( size < 0)
@@ -288,6 +301,22 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 				}
 
 			write(datafd, buffer, size);
+			gettimeofday(&timeAfterWrite, NULL);
+			fileTransferred += size;
+			speedNow = calculateSpeed(&timeBeforeTransmission, \
+				   	&timeAfterWrite, fileTransferred);
+			sleepTime = calculateSleepTime(speedNow, \
+					currentUser -> speedLimit, sleepTime);
+			usleep(sleepTime);
+
+			if(DEBUG)
+			{
+				gettimeofday(&timeAfterWrite, NULL);
+				speedNow = calculateSpeed(&timeBeforeTransmission, \
+					   	&timeAfterWrite, fileTransferred);
+				printf("current speed: %lf\n", speedNow);
+			}
+
 		}
 		reply(currentUser -> controlSocket, CLOSING_DATA,	\
 				"file transfer complete");
@@ -451,4 +480,29 @@ int acceptNew(int listenSocketFileDescriptor)
 			(struct sockaddr *) &dataSocketAddress, \
 			&len);
 	return fd;
+}
+
+double calculateSpeed(struct timeval *before, struct timeval *after, int size)
+{
+	int timeSpan = (after -> tv_sec - before -> tv_sec) * 1000000 + \
+				   (after -> tv_usec - before -> tv_usec);
+	return 1000000.0 / 1024.0 * size / timeSpan;	// remember in kB/s
+}
+
+int calculateSleepTime(double speedNow, int speedLimit, int lastSleepTime)
+{
+	printf("sleepTime: %d\n", lastSleepTime);
+	
+	if( (int)speedNow < speedLimit)
+	{
+		return lastSleepTime / 2;
+	}
+
+	if( (int)speedNow == speedLimit)
+	{
+		return lastSleepTime;
+	}
+
+	double sleepTime = 1000.0 + 1.5 * lastSleepTime;
+	return (int)sleepTime;
 }
