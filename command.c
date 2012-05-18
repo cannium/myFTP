@@ -22,6 +22,8 @@ fd_set readSet;
 static double calculateSpeed(struct timeval *before, struct timeval *after, int size);
 static int calculateSleepTime(double speedNow, int speedLimit, \
 		int lastSleepTime);
+static void transferFile(int fromFileDescriptor, int toFileDescriptor, \
+						user* currentUser);
 
 
 void handleCommand(user* currentUser, const char* buffer, ssize_t size)
@@ -284,40 +286,8 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 			reply(currentUser -> controlSocket, STARTING_DATA,	\
 					"starting transfer file");
 
-		int size;
-		char buffer[BUFFER_SIZE];
-		int sleepTime = 0;		// in microseconds
-		double speedNow = 0.0;	// in kB/s
-		int fileTransferred = 0;// in bytes
-		struct timeval timeBeforeTransmission, timeAfterWrite;
+		transferFile(filefd, datafd, currentUser);
 
-		gettimeofday(&timeBeforeTransmission,NULL);
-		while( size = read(filefd, buffer, BUFFER_SIZE))
-		{
-			if( size < 0)
-				{
-					fprintf(stderr, "read error\n");
-					exit(-1);
-				}
-
-			write(datafd, buffer, size);
-			gettimeofday(&timeAfterWrite, NULL);
-			fileTransferred += size;
-			speedNow = calculateSpeed(&timeBeforeTransmission, \
-				   	&timeAfterWrite, fileTransferred);
-			sleepTime = calculateSleepTime(speedNow, \
-					currentUser -> speedLimit, sleepTime);
-			usleep(sleepTime);
-
-			if(DEBUG)
-			{
-				gettimeofday(&timeAfterWrite, NULL);
-				speedNow = calculateSpeed(&timeBeforeTransmission, \
-					   	&timeAfterWrite, fileTransferred);
-				printf("current speed: %lf\n", speedNow);
-			}
-
-		}
 		reply(currentUser -> controlSocket, CLOSING_DATA,	\
 				"file transfer complete");
 		exit(0);
@@ -354,19 +324,8 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 			reply(currentUser -> controlSocket, STARTING_DATA,	\
 					"OK to receive data");
 		
-		int size;
-		char buffer[BUFFER_SIZE];
-		while( size = read(datafd, buffer, BUFFER_SIZE))
-		{
-			if( size < 0)
-				{
-					fprintf(stderr, "read error\n");
-					exit(-1);
-				}
-
-			write(filefd, buffer, size);
-		}
-				
+		transferFile(datafd, filefd, currentUser);
+			
 		reply(currentUser -> controlSocket, CLOSING_DATA,	\
 				"file transfer complete");
 
@@ -491,8 +450,6 @@ double calculateSpeed(struct timeval *before, struct timeval *after, int size)
 
 int calculateSleepTime(double speedNow, int speedLimit, int lastSleepTime)
 {
-	printf("sleepTime: %d\n", lastSleepTime);
-	
 	if( (int)speedNow < speedLimit)
 	{
 		return lastSleepTime / 2;
@@ -505,4 +462,44 @@ int calculateSleepTime(double speedNow, int speedLimit, int lastSleepTime)
 
 	double sleepTime = 1000.0 + 1.5 * lastSleepTime;
 	return (int)sleepTime;
+}
+
+void transferFile(int fromfd, int tofd, user* currentUser)
+{
+		int size;
+		char buffer[BUFFER_SIZE];
+		int sleepTime = 0;		// in microseconds (10e-6 second)
+		double speedNow = 0.0;	// in kB/s
+		int fileTransferred = 0;// in bytes
+		struct timeval timeBeforeTransmission, timeAfterWrite;
+
+		gettimeofday(&timeBeforeTransmission,NULL);
+
+		while( size = read(fromfd, buffer, BUFFER_SIZE))
+		{
+			if( size < 0)
+				{
+					fprintf(stderr, "read error\n");
+					exit(-1);
+				}
+
+			write(tofd, buffer, size);
+			fileTransferred += size;			
+			gettimeofday(&timeAfterWrite, NULL);
+			
+			speedNow = calculateSpeed(&timeBeforeTransmission, \
+				   	&timeAfterWrite, fileTransferred);
+			sleepTime = calculateSleepTime(speedNow, \
+					currentUser -> speedLimit, sleepTime);
+			usleep(sleepTime);
+
+			if(DEBUG)
+			{
+				gettimeofday(&timeAfterWrite, NULL);
+				speedNow = calculateSpeed(&timeBeforeTransmission, \
+					   	&timeAfterWrite, fileTransferred);
+				printf("current speed: %lf\n", speedNow);
+			}
+
+		}	
 }
