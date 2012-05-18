@@ -80,13 +80,22 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 	else if( strcmp(request, "CWD") == 0)	// change working directory
 	{
 		chdir(currentUser -> currentPath);
-		if( ( chdir(parameter) ) == 0 )
+		if( ( chdir(parameter) ) == 0)
 		{
 			char path[PATH_LENGTH];
 			getcwd(path, sizeof(path));
-			strcpy(currentUser -> currentPath, path);
-			reply(currentUser -> controlSocket, OPERATE_SUCCESS,	\
-					"Change working directory success!");
+			if( newPathAccessible(path, currentUser -> homeDirectory) &&
+				currentUser -> readAccess)
+			{
+				strcpy(currentUser -> currentPath, path);
+				reply(currentUser -> controlSocket, OPERATE_SUCCESS,	\
+						"Change working directory success!");
+			}
+			else
+			{
+				reply(currentUser -> controlSocket,	OPERATE_FAILED, \
+						"you have no permission");
+			}
 		}
 		else
 		{
@@ -104,6 +113,13 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 	else if( strcmp(request, "LIST") == 0 ||
 				strcmp(request, "NLST") == 0)	// list files and directories
 	{
+		if(! currentUser -> readAccess)
+		{
+			reply(currentUser -> controlSocket,	OPERATE_FAILED, \
+					"you have no permission");
+			return;
+		}
+
 		// since sending file list needs blocking system call,
 		// fork a child process first
 		pid_t pid = fork();
@@ -135,7 +151,7 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 		{
 			sprintf(buffer, "%-25s", dirp -> d_name);
 
-			if( n % 3 == 0)		// 3 columns a line
+			if( n % 3 == 0 && strcmp(request, "LIST") == 0)	// 3 columns a line
 			{
 				strcat(buffer, "\r\n");
 			}
@@ -155,9 +171,17 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 		chdir(currentUser -> currentPath);		
 		if( (access(parameter, F_OK)) == 0) // test if file exists
 		{
-			strcpy(currentUser -> renameFile, parameter);
-			reply(currentUser -> controlSocket, FURTHER_INFO,	\
-					"ready for RNTO");
+			if(currentUser -> writeAccess)
+			{
+				strcpy(currentUser -> renameFile, parameter);
+				reply(currentUser -> controlSocket, FURTHER_INFO,	\
+						"ready for RNTO");
+			}
+			else
+			{
+				reply(currentUser -> controlSocket, OPERATE_FAILED, \
+						"you have no permission");
+			}
 		}
 		else
 			reply(currentUser -> controlSocket, OPERATE_FAILED,	\
@@ -257,6 +281,13 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 	}
 	else if( strcmp(request, "RETR") == 0)	// retrieve file
 	{
+		if(! currentUser -> readAccess)
+		{
+			reply(currentUser -> controlSocket,	OPERATE_FAILED, \
+					"you have no permission");
+			return;
+		}
+
 		// fork a child process
 		pid_t pid = fork();
 		if(pid < 0)
@@ -294,6 +325,13 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 	}
 	else if( strcmp(request, "STOR") == 0)	// store file
 	{
+		if(! currentUser -> writeAccess)
+		{
+			reply(currentUser -> controlSocket,	OPERATE_FAILED, \
+					"you have no permission");
+			return;
+		}
+
 		// fork a child process
 		pid_t pid = fork();
 		if(pid < 0)
@@ -334,6 +372,13 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 	else if( strcmp(request, "DELE") == 0 ||	\
 			 strcmp(request, "RMD") == 0)	// delete file or directory
 	{
+		if(! currentUser -> writeAccess)
+		{
+			reply(currentUser -> controlSocket,	OPERATE_FAILED, \
+					"you have no permission");
+			return;
+		}
+
 		// since we can use a same system call remove() to 
 		// delete file and delete directory,
 		// we handle DELE and RMD together
@@ -504,4 +549,17 @@ void transferFile(int fromfd, int tofd, int speedLimit)
 			}
 
 		}	
+}
+
+int newPathAccessible(char* newPath, char* homeDirectory)
+{
+	int newPathLength = strlen(newPath);
+	int homeDirectoryLength = strlen(homeDirectory);
+	if(newPathLength < homeDirectoryLength)
+		return 0;
+
+	if( strncmp(newPath, homeDirectory, homeDirectoryLength) == 0)
+		return 1;
+	else
+		return 0;
 }
