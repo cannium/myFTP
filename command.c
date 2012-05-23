@@ -77,6 +77,11 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 			moveUser(&connectedUser, &unconnectedUser, currentUser);
 		}
 	}
+	else if( strcmp(request, "SYST") == 0)	// system
+	{
+		reply(currentUser -> controlSocket, SYSTEM_TYPE, \
+				"UNIX Type: L8");
+	}
 	else if( strcmp(request, "CWD") == 0)	// change working directory
 	{
 		chdir(currentUser -> currentPath);
@@ -278,8 +283,14 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 		switch(parameter[0])
 		{
 			case 'I':
+				currentUser -> transferMode = BINARY_MODE;
 				reply(currentUser -> controlSocket, COMMAND_OK, \
-						"always binary mode");
+						"changed to binary mode");
+				break;
+			case 'A':
+				currentUser -> transferMode = ASCII_MODE;
+				reply(currentUser -> controlSocket, COMMAND_OK, \
+						"changed to ASCII mode");
 				break;
 			default:
 				reply(currentUser -> controlSocket, SYNTAX_ERROR, \
