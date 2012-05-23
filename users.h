@@ -2,6 +2,7 @@
 #define USERS_H
 
 #include <time.h>
+#include <netinet/in.h>
 
 #define NAME_LENGTH		64
 #define PATH_LENGTH		1024
@@ -11,6 +12,9 @@
 
 #define DISABLE			0
 #define ENABLE			1
+
+#define ASCII_MODE		0
+#define BINARY_MODE		1
 
 struct userInformation
 {
@@ -23,10 +27,12 @@ struct userInformation
 	char renameFile[PATH_LENGTH];	// file to be renamed
 	int controlSocket;				// control connection file descriptor
 	int	dataSocket;					// data-transfer listen socket file 
-									// descriptor, used in passive mode
-	int dataPortNumber;				// port number for data transmission,
-									// used in active mode	
+									// descriptor in passive mode, and 
+									// data-transfer socket in active mode
+	struct sockaddr_in clientAddress;	// client address structure, used in
+										// active mode
 	int ftpMode;					// ACTIVE_MODE or PASSIVE_MODE
+	int transferMode;				// ASCII_MODE or BINARY_MODE
 	time_t loginTime;				// when the user logged in
 	long long dataTransferred;		// total bytes of data transferred
 	int speedLimit;					// the speed limit of uploading and 
