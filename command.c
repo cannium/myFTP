@@ -23,7 +23,7 @@ static double calculateSpeed(struct timeval *before, struct timeval *after, int 
 static int calculateSleepTime(double speedNow, int speedLimit, \
 		int lastSleepTime);
 static void transferFile(int fromFileDescriptor, int toFileDescriptor, \
-						int speedLimit);
+						user* user, int upOrDown);
 static void connectToClient(user* user);
 
 void handleCommand(user* currentUser, const char* buffer, ssize_t size)
@@ -345,7 +345,7 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 			reply(currentUser -> controlSocket, STARTING_DATA,	\
 					"starting transfer file");
 
-		transferFile(filefd, datafd, currentUser -> speedLimit);
+		transferFile(filefd, datafd, currentUser, FILE_RETR);
 
 		reply(currentUser -> controlSocket, CLOSING_DATA,	\
 				"file transfer complete");
@@ -397,7 +397,7 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 			reply(currentUser -> controlSocket, STARTING_DATA,	\
 					"OK to receive data");
 		
-		transferFile(datafd, filefd, currentUser -> speedLimit);
+		transferFile(datafd, filefd, currentUser, FILE_STOR);
 			
 		reply(currentUser -> controlSocket, CLOSING_DATA,	\
 				"file transfer complete");
@@ -556,46 +556,95 @@ int calculateSleepTime(double speedNow, int speedLimit, int lastSleepTime)
 	return (int)sleepTime;
 }
 
-void transferFile(int fromfd, int tofd, int speedLimit)
+void transferFile(int fromfd, int tofd, user* user, int upOrDown)
 {
-		int size;
-		char buffer[BUFFER_SIZE];
-		int sleepTime = 0;		// in microseconds (10e-6 second)
-		double speedNow = 0.0;	// in kB/s
-		int fileTransferred = 0;// in bytes
-		struct timeval timeBeforeTransmission, timeAfterWrite;
+	int size;
+	char buffer[BUFFER_SIZE];
+	int sleepTime = 0;		// in microseconds (10e-6 second)
+	double speedNow = 0.0;	// in kB/s
+	int fileTransferred = 0;// in bytes
+	struct timeval timeBeforeTransmission, timeAfterWrite;
 
-		gettimeofday(&timeBeforeTransmission,NULL);
+	gettimeofday(&timeBeforeTransmission,NULL);
 
-		while( size = read(fromfd, buffer, BUFFER_SIZE))
+	FILE* input;	
+	if(user -> transferMode == ASCII_MODE)
+	{
+		input = fdopen(fromfd, "r");
+	}		
+
+	while(1)
+	{
+		if(user -> transferMode == BINARY_MODE)
 		{
-			if( size < 0)
+			size = read(fromfd, buffer, BUFFER_SIZE);
+			if(size == 0)
+				break;
+			if(size < 0)
 				{
 					fprintf(stderr, "read error\n");
 					exit(-1);
 				}
+		}
+		else if(user -> transferMode == ASCII_MODE)
+		{
+			fgets(buffer, BUFFER_SIZE - 3, input);
+			
+			if( feof(input))
+				break;
 
-			write(tofd, buffer, size);
-			fileTransferred += size;			
-
-			if(speedLimit)
+			if( ferror(input))
 			{
-				gettimeofday(&timeAfterWrite, NULL);	
-				speedNow = calculateSpeed(&timeBeforeTransmission, \
-					   	&timeAfterWrite, fileTransferred);
-				sleepTime = calculateSleepTime(speedNow, speedLimit, sleepTime);
-				usleep(sleepTime);
+				fprintf(stderr, "read error\n");
+				exit(-1);
 			}
 
-			if(DEBUG)
+			int len = strlen(buffer);
+			if( buffer[len - 2] == '\r' && buffer[len - 1] == '\n' && 
+					upOrDown == FILE_STOR)
 			{
-				gettimeofday(&timeAfterWrite, NULL);
-				speedNow = calculateSpeed(&timeBeforeTransmission, \
-					   	&timeAfterWrite, fileTransferred);
-				printf("current speed: %lf\n", speedNow);
+				buffer[len - 2] = '\n';
+				buffer[len - 1] = 0;
+				size = len - 1;
 			}
+			else if( buffer[len - 1] == '\n' && upOrDown == FILE_RETR)
+			{
+				buffer[len - 1] = '\r';
+				buffer[len] = '\n';
+				buffer[len + 1] = 0;
+				size = len + 1;
+			}
+		}
+		else
+		{
+			reply(user -> controlSocket, DATA_ABORT,	\
+					"transfer mode not supported");
+			exit(0);
+		}
 
-		}	
+		write(tofd, buffer, size);
+		fileTransferred += size;
+		user -> dataTransferred += size;			
+
+		if(user -> speedLimit)
+		{
+			gettimeofday(&timeAfterWrite, NULL);	
+			speedNow = calculateSpeed(&timeBeforeTransmission, \
+					&timeAfterWrite, fileTransferred);
+			sleepTime = calculateSleepTime(speedNow, user -> speedLimit, \
+						sleepTime);
+			usleep(sleepTime);
+		}
+
+		if(DEBUG)
+		{
+			gettimeofday(&timeAfterWrite, NULL);
+			speedNow = calculateSpeed(&timeBeforeTransmission, \
+					&timeAfterWrite, fileTransferred);
+			printf("current speed: %lf\n", speedNow);
+		}
+
+	}	
 }
 
 int newPathAccessible(char* newPath, char* homeDirectory)

@@ -17,6 +17,7 @@
 #define NEED_PASSWORD	331
 #define FURTHER_INFO	350
 #define DATA_FAILED		425
+#define DATA_ABORT		426
 #define SYNTAX_ERROR	500
 #define NOT_IMPLEMENT	502
 #define LOGIN_FAILED	530
@@ -24,6 +25,9 @@
 
 #define DIR_MASK		0777
 #define FILE_MASK		0755
+
+#define FILE_RETR		0
+#define FILE_STOR		1
 
 void handleCommand(user* currentUser, const char* buffer, ssize_t size);
 void reply(int socketFileDescriptor, int replyCode, const char* message);

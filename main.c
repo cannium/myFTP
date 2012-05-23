@@ -81,6 +81,8 @@ void initialize()
 			newUser -> readAccess = DISABLE;
 
 		newUser -> speedLimit = atoi(speedLimit);
+		newUser -> transferMode = ASCII_MODE;
+		newUser -> dataTransferred = 0;
 	}
 	if(DEBUG)
 		printUserList(&unconnectedUser);
