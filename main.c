@@ -107,6 +107,7 @@ void mainLoop()
 
 	while(1)
 	{
+		memset(buffer, 0, sizeof(buffer));
 		tempSet = readSet;
 		int readyNumber = select(maxFileDescriptor + 1, &tempSet, NULL, \
 									NULL, NULL);

@@ -136,7 +136,11 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 			return;
 		}
 
-		int fd = acceptNew(currentUser -> dataSocket);
+		int fd;
+		if(currentUser -> ftpMode == PASSIVE_MODE)
+			fd = acceptNew(currentUser -> dataSocket);
+		else
+			fd = currentUser -> dataSocket;
 			
 		reply(currentUser -> controlSocket, STARTING_DATA,	\
 				"here comes listing");
@@ -252,6 +256,31 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 						localAddressOfNewServer.sin_port));
 		}
 	}
+	else if( strcmp(request, "PORT") == 0)		// active mode
+	{
+		int a,b,c,d,e,f;
+		sscanf(parameter, "%d,%d,%d,%d,%d,%d", &a, &b, &c, &d, &e, &f);
+		char ipString[BUFFER_SIZE];
+		sprintf(ipString, "%d.%d.%d.%d", a, b, c, d);
+		struct sockaddr_in serverAddress;
+		serverAddress.sin_family = AF_INET;
+		serverAddress.sin_port = htons(e * 256 + f);
+		inet_pton(AF_INET, ipString, &serverAddress.sin_addr);
+		int socketfd = socket(AF_INET, SOCK_STREAM, 0);
+		if( connect(socketfd, (struct sockaddr *) &serverAddress, \
+					sizeof(serverAddress) <= 0) )
+		{
+			reply(currentUser -> controlSocket, DATA_FAILED,	\
+					"can't open data connection");
+		}
+		else
+		{
+			currentUser -> dataSocket = socketfd;
+			currentUser -> ftpMode = ACTIVE_MODE;
+			reply(currentUser -> controlSocket, COMMAND_OK,		\
+					"PORT command successful");
+		}
+	}
 	else if( strcmp(request, "TYPE") == 0)	// data transfer type
 	{
 		switch(parameter[0])
@@ -301,8 +330,12 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 			currentUser -> dataSocket = 0;
 			return;
 		}
-
-		int datafd = acceptNew(currentUser -> dataSocket);
+		
+		int datafd;
+		if(currentUser -> ftpMode == PASSIVE_MODE)
+			datafd = acceptNew(currentUser -> dataSocket);
+		else
+			datafd = currentUser -> dataSocket;
 
 		// open and read file, save to buffer, send to client
 		chdir(currentUser -> currentPath);	
@@ -346,7 +379,11 @@ void handleCommand(user* currentUser, const char* buffer, ssize_t size)
 			return;
 		}
 
-		int datafd = acceptNew(currentUser -> dataSocket);
+		int datafd;
+		if(currentUser -> ftpMode == PASSIVE_MODE)   
+			datafd = acceptNew(currentUser -> dataSocket);
+		else
+			datafd = currentUser -> dataSocket;
 
 		// open file, receive data, save to buffer, write to file
 		chdir(currentUser -> currentPath);	
