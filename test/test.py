@@ -12,6 +12,8 @@ import os
 
 serverAddress = '127.0.0.1'
 serverPort = 21
+# foramt:
+# 'name' : 'password'
 users = { 'can':'123',
 		'test':'test'}
 
@@ -223,7 +225,7 @@ if __name__ == '__main__' :
 
 
 	print '########### passive mode RETR ###########'
-	print 'download test.txt as file3.txt'
+	print 'download test2.txt as file3.txt'
 # pasv & retr
 	for name in sockets:
 		try:
