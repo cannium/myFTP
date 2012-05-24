@@ -161,7 +161,7 @@ void mainLoop()
 		}
 
 		if(DEBUG)
-			printf("now check connectedUser\n");
+			printf("now check connectedUser, readyNumber= %d\n", readyNumber);
 
 		// for all users in connectedUser, test if new data comes
 		// handle the request using handleCommand()
@@ -195,7 +195,7 @@ void mainLoop()
 		}
 
 		if(DEBUG)
-			printf("now check unknownUserFileDescriptor\n");
+			printf("now check unknownUserFileDescriptor, readyNumber= %d\n", readyNumber);
 
 		// for all file descriptors in unknownUserFileDescriptor,
 		// test if new data comes,
