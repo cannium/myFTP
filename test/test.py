@@ -69,9 +69,12 @@ if __name__ == '__main__' :
 	for name in users:
 		print 'name:', name, 'password:', users[name]
 
-		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		s.connect( (serverAddress, serverPort) )
-		sockets[name] = s
+		try:
+			s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+			s.connect( (serverAddress, serverPort) )
+			sockets[name] = s
+		except:
+			print "can't connect to server, double check address and port"
 
 	print '------------------------------------'
 	
@@ -135,9 +138,11 @@ if __name__ == '__main__' :
 # port & list
 	for name in sockets:
 		s = port(sockets[name])
+		time.sleep(1)	
 		sockets[name].send('LIST\r\n')
 		try:
 			connect, address = s.accept()
+			time.sleep(1)
 			data = connect.recv(size)
 			print 'LIST format:'
 			print '------------------------------------'		
@@ -268,21 +273,31 @@ if __name__ == '__main__' :
 
 	print '########### files compare ###########'	
 # file comapre
-	file1 = file('file1.txt').readlines()
-	file2 = file('file2.txt').readlines()
-	file3 = file('file3.txt').readlines()
-
 	print 'file1 is the original file'
 	print 'file2 is the file upload then download in active mode'
 	print 'file3 is the file upload then download in passive mode'
-	print '------------------------------------'		
+	print '------------------------------------'	
 
-	if(file1 == file2):
+	file1 = file('file1.txt').readlines()
+
+	file2 = None
+	file3 = None
+	try:
+		file2 = file('file2.txt').readlines()
+	except:
+		print 'file2 not exist, server may not support Active Mode'
+
+	try:
+		file3 = file('file3.txt').readlines()
+	except:
+		print 'file3 not exist, server may not support Passive Mode'	
+
+	if file1 == file2:
 		print 'file1 == file2'
 	else:
 		print 'file1 != file2'
 
-	if(file1 == file3):
+	if file1 == file3:
 		print 'file1 == file3'
 	else:
 		print 'file1 != file3'
