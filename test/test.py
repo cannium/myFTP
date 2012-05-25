@@ -30,7 +30,7 @@ clientAddress = '127.0.0.1'
 
 
 size = 2 ** 15
-socket.setdefaulttimeout(5)
+socket.setdefaulttimeout(10)
 
 def port(controlSocket):
 	clientPort = random.randint(10000, 20000)
@@ -50,13 +50,13 @@ def pasv(controlSocket):
 	controlSocket.send('PASV')
 	data = controlSocket.recv(size)
 	print data
-	pattern = '\(([0-9 ]+),([0-9 ]+),([0-9 ]+),([0-9 ]+),([0-9 ]+),([0-9 ]+)\)'
+	pattern = '([0-9 ]+),([0-9 ]+),([0-9 ]+),([0-9 ]+),([0-9 ]+),([0-9 ]+)'
 	match = re.findall(pattern, data)
 	if match:
 		match = match[0]
 		ipString = match[0] + '.' + match[1] + '.' + match[2] + '.' + match[3]
 		port = int(match[4]) * 256 + int(match[5])
-		print ipString, port
+		print 'remote:', ipString, port
 		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		s.connect( (ipString, port))
 		return s
@@ -76,6 +76,7 @@ if __name__ == '__main__' :
 			s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			s.connect( (serverAddress, serverPort) )
 			sockets[name] = s
+			print name, 'using ', s.getsockname()
 		except:
 			print "can't connect to server, double check address and port"
 
@@ -160,6 +161,8 @@ if __name__ == '__main__' :
 
 	print '########### active mode STOR ###########'
 	print 'upload file1.txt as test.txt'
+	fileSize = os.path.getsize('file1.txt')
+	totalTraffic = 0	# Byte
 # port & stor
 	for name in sockets:
 		s = port(sockets[name])
@@ -168,6 +171,7 @@ if __name__ == '__main__' :
 		try:
 			connect, address = s.accept()
 			testFile = file('file1.txt')
+			startTime = time.time()
 			while True:
 				data = testFile.read(size)
 				if(data):
@@ -176,7 +180,11 @@ if __name__ == '__main__' :
 					break
 			print sockets[name].recv(size)
 			connect.close()
-			print sockets[name].recv(size)			  
+			print sockets[name].recv(size)
+			endTime = time.time()
+			print 'average speed:', fileSize/(endTime - startTime)/1024,'kB/s'
+			totalTraffic += fileSize
+			print 'total traffic:', totalTraffic, 'Bytes'
 		except:
 			print 'Fail!!'
 		s.close()
@@ -193,6 +201,7 @@ if __name__ == '__main__' :
 		try:
 			connect, address = s.accept()
 			testFile = open('file2.txt', 'w')
+			startTime = time.time()
 			while True:
 				data = connect.recv(size)
 				if(data):
@@ -202,6 +211,10 @@ if __name__ == '__main__' :
 			print sockets[name].recv(size)
 			testFile.close()
 			connect.close()
+			endTime = time.time()
+			print 'average speed:', fileSize/(endTime - startTime)/1024,'kB/s'
+			totalTraffic += fileSize
+			print 'total traffic:', totalTraffic, 'Bytes'
 		except:
 			print 'Fail!!'
 		s.close()
@@ -218,6 +231,7 @@ if __name__ == '__main__' :
 			time.sleep(1)
 			sockets[name].send('STOR test2.txt')
 			testFile = file('file1.txt')
+			startTime = time.time()
 			while True:
 				data = testFile.read(size)
 				if(data):
@@ -227,6 +241,10 @@ if __name__ == '__main__' :
 			print sockets[name].recv(size)
 			s.close()
 			print sockets[name].recv(size)
+			endTime = time.time()
+			print 'average speed:', fileSize/(endTime - startTime)/1024,'kB/s'
+			totalTraffic += fileSize
+			print 'total traffic:', totalTraffic, 'Bytes'		  
 		except:
 			print 'Fail!!'		
 		break	# test once
@@ -241,6 +259,7 @@ if __name__ == '__main__' :
 			time.sleep(1)
 			sockets[name].send('RETR test2.txt')
 			testFile = open('file3.txt', 'w')
+			startTime = time.time()
 			while True:
 				data = s.recv(size)
 				if(data):
@@ -250,6 +269,10 @@ if __name__ == '__main__' :
 			print sockets[name].recv(size)
 			testFile.close()
 			s.close()
+			endTime = time.time()
+			print 'average speed:', fileSize/(endTime - startTime)/1024,'kB/s'
+			totalTraffic += fileSize
+			print 'total traffic:', totalTraffic, 'Bytes' 
 		except:
 			print 'Fail!!'
 		break	# test once
