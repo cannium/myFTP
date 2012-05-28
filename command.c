@@ -633,7 +633,13 @@ void transferFile(int fromfd, int tofd, user* user, int upOrDown)
 			exit(0);
 		}
 
-		write(tofd, buffer, size);
+		int writeSize = write(tofd, buffer, size);
+		if(writeSize != size)
+		{
+			fprintf(stderr, "write error");
+			exit(-1);
+		}
+
 		fileTransferred += size;
 		user -> dataTransferred += size;			
 
